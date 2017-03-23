@@ -35,7 +35,7 @@ ICW4        EQU 03h     ;00000011b - 000, 0:not special fully nested, non-buffer
 OCW1        EQU 0FCh    ;11111101 - channel 1 enabled.
 
 ; 8279 Setup
-LED_RIGHT   EQU 090h    ;
+LED_RIGHT   EQU 090h    ;Address of the LED we want to use
 LED_CNTR    EQU 0FFEAh  ;Port number for 8279 control register
 LED_DATA    EQU 0FFE8h  ;Port number for 8279 data register 
 
@@ -46,10 +46,10 @@ LED_DATA    EQU 0FFE8h  ;Port number for 8279 data register
 VECTOR_SEG  SEGMENT
 ORG         00080h          ;Interrupt vector: type 32 dec.
         
-IR0_IP_VECT DW  ?           ;Low contains IP of ISR0
-IR0_CS_VECT DW  ?           ;High contains CS of ISR0
-IR1_IP_VECT DW  ?           ;Low contains IP of ISR1
-IR1_CS_VECT DW  ?           ;High contains CS of ISR1
+IR0_IP_VECT DW  ISR0       ;Low contains IP of ISR0
+IR0_CS_VECT DW  00010h     ;High contains CS of ISR0
+IR1_IP_VECT DW  ISR1       ;Low contains IP of ISR1
+IR1_CS_VECT DW  00010h     ;High contains CS of ISR1
 
 VECTOR_SEG  ENDS
 
@@ -80,8 +80,8 @@ INIT        PROC    NEAR
 
 ;Initialize 8253 counter0 and counter1 - counter2 is not used.
 ;Clock is the peripheral clock with frequency assumed to be 2.45MHz
-;____________________________________________________________________________
-;____________________________________________________________________________
+;
+;
 
         MOV DX,COUNT_CNTR   ;This is the address of the counter
         MOV AL,MODE3
@@ -101,22 +101,21 @@ INIT        PROC    NEAR
         MOV AL,HI1SEC
         OUT     DX,AL
 
-;Initialize 8259A to :_______________________________________________________
-;____________________________________________________________________________
-;____________________________________________________________________________
+;Initialize 8259A to : Works as an interrupt controller. 
+;It is put in 8088/8086 mode. It is edge triggered
 
-        MOV DX,CLR_A0 ;____________________________________________________
+        MOV DX,CLR_A0 ;Address for ICW1
         MOV AL,ICW1
         OUT DX,AL
-        MOV DX,SET_A0   ;____________________________________________________
+        MOV DX,SET_A0   ;Address for ICW2
         MOV AL,ICW2
         OUT DX,AL
-        MOV AL,ICW4     ;____________________________________________________
+        MOV AL,ICW4     ;Shouldn't an Address be set for this?
         OUT DX,AL
 
-;____________________________________________________________________________
+;Use the mask, such that we enable only input 1 (the second pin)
 
-        MOV AL,OCW1     ;____________________________________________________
+        MOV AL,OCW1     ;Load it ready for outputting.
         OUT DX,AL
 
 ;Initialization complete, interrupts still disabled.
@@ -165,7 +164,7 @@ ISR0    ENDP
 ISR1    PROC    NEAR        
         PUSH    AX              ;Save registers.
         PUSH    DX
-        MOV     AL,LED_RIGHT    ;____________________________________________ 
+        MOV     AL,LED_RIGHT    ;load the address of the LED we are using
         MOV     DX,LED_CNTR     ;Address of control register  
         OUT     DX,AL           ;Load LED addr.-> control reg.
         MOV     DX,LED_DATA     ;Address for data register

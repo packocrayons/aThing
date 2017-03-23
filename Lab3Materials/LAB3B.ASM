@@ -17,25 +17,25 @@ PORT_B_ADDR EQU 0FFFAh  ;Port B address
 
 ; 8253 Setup
 COUNT_CNTR  EQU 000Eh   ;counter control register address
-MODE2       EQU 74h     ;_________________________________________________
-MODE3       EQU 36h     ;_________________________________________________
+MODE2       EQU 74h     ;01110100b - 01:Select Counter 1, 11:Read LSB first, 010:Mode 2, 0:Binary counter
+MODE3       EQU 36h     ;00110110b - 00: select counter 0, 11:Read LSB first, 011:Mode 3, 0:Binary counter
 COUNT0      EQU 0008h   ;counter0 address
 COUNT1      EQU 000Ah   ;counter1 address
-LO10MSEC    EQU 0B4h    ;_________________________________________________
-HI10MSEC    EQU 05Fh    ;_________________________________________________
-LO1SEC      EQU 064h    ;_________________________________________________
-HI1SEC      EQU 000h    ;_________________________________________________
+LO10MSEC    EQU 0B4h    ;5FB4 = 24500 at 2450000 = 1/100 = 10mSec
+HI10MSEC    EQU 05Fh    ;
+LO1SEC      EQU 064h    ;This doesn't seem to be the right number? it should be 2450000 = 256250h
+HI1SEC      EQU 000h    ;
 
 ; 8259A Setup
-CLR_A0      EQU 0000h   ;Which CW's written here? _____________________________
-SET_A0      EQU 0002h   ;Which CW's written here? _____________________________
-ICW1        EQU 17h     ;______________________________________________________
-ICW2        EQU 20h     ;______________________________________________________
-ICW4        EQU 03h     ;______________________________________________________
-OCW1        EQU 0FCh    ;______________________________________________________
+CLR_A0      EQU 0000h   ;Which CW's written here? A0 = 0, A1 = 1 (8086 uses A1, use both for safety), D4 must be 1 to write ICW1
+SET_A0      EQU 0002h   ;Which CW's written here? A0 = 1, A1 = 1 ("      "            "          " ), D4 must be 1 to write ICW2
+ICW1        EQU 17h     ;00010111b - 000: address of IVA, 1, 0 - Edge triggered, 1: Call address interval of 4, Single mode, ICW4 needed
+ICW2        EQU 20h     ;00100000b - T7-T3 = 00100
+ICW4        EQU 03h     ;00000011b - 000, 0:not special fully nested, non-buffered, Auto EOI, 8086 mode
+OCW1        EQU 0FCh    ;11111101 - channel 1 enabled.
 
 ; 8279 Setup
-LED_RIGHT   EQU 090h    ;_________________________________________________
+LED_RIGHT   EQU 090h    ;Address of the LED we want to use
 LED_CNTR    EQU 0FFEAh  ;Port number for 8279 control register
 LED_DATA    EQU 0FFE8h  ;Port number for 8279 data register 
 
@@ -46,10 +46,10 @@ LED_DATA    EQU 0FFE8h  ;Port number for 8279 data register
 VECTOR_SEG  SEGMENT
 ORG         00080h          ;Interrupt vector: type 32 dec.
         
-IR0_IP_VECT DW  ?           ;Low contains IP of ISR0
-IR0_CS_VECT DW  ?           ;High contains CS of ISR0
-IR1_IP_VECT DW  ?           ;Low contains IP of ISR1
-IR1_CS_VECT DW  ?           ;High contains CS of ISR1
+IR0_IP_VECT DW  ISR0       ;Low contains IP of ISR0
+IR0_CS_VECT DW  00010h     ;High contains CS of ISR0
+IR1_IP_VECT DW  ISR1       ;Low contains IP of ISR1
+IR1_CS_VECT DW  00010h     ;High contains CS of ISR1
 
 VECTOR_SEG  ENDS
 
@@ -80,43 +80,42 @@ INIT        PROC    NEAR
 
 ;Initialize 8253 counter0 and counter1 - counter2 is not used.
 ;Clock is the peripheral clock with frequency assumed to be 2.45MHz
-;____________________________________________________________________________
-;____________________________________________________________________________
+;
+;
 
-        MOV DX,COUNT_CNTR   ;________________________________________________
+        MOV DX,COUNT_CNTR   ;This is the address of the counter
         MOV AL,MODE3
         OUT DX,AL
         MOV DX,COUNT0
-        MOV AL,LO10MSEC     ;________________________________________________
+        MOV AL,LO10MSEC     ;write the counter value (LSB first - from the mode), then MSB
         OUT DX,AL
         MOV AL,HI10MSEC
         OUT DX,AL
 
-        MOV DX,COUNT_CNTR   ;________________________________________________
+        MOV DX,COUNT_CNTR   ;Same address
         MOV AL,MODE2
         OUT DX,AL
         MOV DX,COUNT1
-        MOV AL,LO1SEC       ;________________________________________________
+        MOV AL,LO1SEC       ;Write the counter 1 value, LSB first
         OUT DX,AL
         MOV AL,HI1SEC
         OUT     DX,AL
 
-;Initialize 8259A to :_______________________________________________________
-;____________________________________________________________________________
-;____________________________________________________________________________
+;Initialize 8259A to : Works as an interrupt controller. 
+;It is put in 8088/8086 mode. It is edge triggered
 
-        MOV DX,CLR_A0 ;____________________________________________________
+        MOV DX,CLR_A0 ;Address for ICW1
         MOV AL,ICW1
         OUT DX,AL
-        MOV DX,SET_A0   ;____________________________________________________
+        MOV DX,SET_A0   ;Address for ICW2
         MOV AL,ICW2
         OUT DX,AL
-        MOV AL,ICW4     ;____________________________________________________
+        MOV AL,ICW4     ;Shouldn't an Address be set for this?
         OUT DX,AL
 
-;____________________________________________________________________________
+;Use the mask, such that we enable only input 1 (the second pin)
 
-        MOV AL,OCW1     ;____________________________________________________
+        MOV AL,OCW1     ;Load it ready for outputting.
         OUT DX,AL
 
 ;Initialization complete, interrupts still disabled.
@@ -165,7 +164,7 @@ ISR0    ENDP
 ISR1    PROC    NEAR        
         PUSH    AX              ;Save registers.
         PUSH    DX
-        MOV     AL,LED_RIGHT    ;____________________________________________ 
+        MOV     AL,LED_RIGHT    ;load the address of the LED we are using
         MOV     DX,LED_CNTR     ;Address of control register  
         OUT     DX,AL           ;Load LED addr.-> control reg.
         MOV     DX,LED_DATA     ;Address for data register
