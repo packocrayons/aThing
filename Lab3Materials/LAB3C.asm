@@ -31,13 +31,17 @@ CLR_A0      EQU 0000h   ;Which CW's written here? A0 = 0, A1 = 1 (8086 uses A1, 
 SET_A0      EQU 0002h   ;Which CW's written here? A0 = 1, A1 = 1 ("      "            "          " ), D4 must be 1 to write ICW2
 ICW1        EQU 17h     ;00010111b - 000: address of IVA, 1, 0 - Edge triggered, 1: Call address interval of 4, Single mode, ICW4 needed
 ICW2        EQU 20h     ;00100000b - T7-T3 = 00100
-ICW4        EQU 03h     ;00000011b - 000, 0:not special fully nested, non-buffered, Auto EOI, 8086 mode
-OCW1        EQU 0FCh    ;11111101 - channel 1 enabled.
+ICW4        EQU 03h     ;00010011b - 000, 1:fully nested, non-buffered, Auto EOI, 8086 mode
+OCW1        EQU 0F8h    ;11111000 - channel 2, 1 and 0 enabled.
 
 ; 8279 Setup
 LED_RIGHT   EQU 090h    ;Address of the LED we want to use
+LED_LEFT	EQU 000h 	;Address of leftMost LED
 LED_CNTR    EQU 0FFEAh  ;Port number for 8279 control register
 LED_DATA    EQU 0FFE8h  ;Port number for 8279 data register 
+
+; ISR 2 constant
+MAX_LED_POSITION EQU 0 
 
 ;-----------------------------------------------------------------------------
 ;       S T A R T    O F    V E C T O R    S E G M E N T 
@@ -50,6 +54,8 @@ IR0_IP_VECT DW  ISR0       ;Low contains IP of ISR0
 IR0_CS_VECT DW  00010h     ;High contains CS of ISR0
 IR1_IP_VECT DW  ISR1       ;Low contains IP of ISR1
 IR1_CS_VECT DW  00010h     ;High contains CS of ISR1
+IR2_IP_VECT DW  ISR2       ;Low contains IP of ISR2
+IR2_CS_VECT DW  00010h     ;High contains CS of ISR2
 
 VECTOR_SEG  ENDS
 
@@ -113,7 +119,7 @@ INIT        PROC    NEAR
         MOV AL,ICW4     ;Shouldn't an Address be set for this?
         OUT DX,AL
 
-;Use the mask, such that we enable only input 1 (the second pin)
+;Use the mask, such that we enable only input 1 and input 0 and input 2
 
         MOV AL,OCW1     ;Load it ready for outputting.
         OUT DX,AL
@@ -179,6 +185,31 @@ ISR1    ENDP
 
 
 ;..............................................................................
+;	INTERRUPT SERVICE ROUTINE : ISR2
+;This ISR will write to the first character of the display on the 8279
+;..............................................................................
+ISR2    PROC    NEAR        
+        PUSH    AX              ;Save registers.
+        PUSH    BX
+        PUSH    DX
+        MOV     AL,LED_LEFT    ;load the address of the LED we are using
+        MOV     DX,LED_CNTR     ;Address of control register  
+        OUT     DX,AL           ;Load LED addr.-> control reg.
+        MOV     DX,LED_DATA     ;Address for data register
+        MOV     AL,[LED_TABLE + LED_POSITION]
+        INC     LED_POSITION
+        MOV     BX, LED_POSITION
+        CMP     BX, MAX_LED_POSITION
+        JNE     DISP
+        MOV     LED_POSITION, 0
+DISP:   OUT     DX,AL           ;Send to LED display
+        POP     DX              ;Restore registers
+        POP     BX
+        POP     AX      
+        IRET            
+ISR2    ENDP
+
+;..............................................................................
 ;   S T A R T     O F     M A I N     P R O G R A M 
 ;..............................................................................
 
@@ -214,6 +245,7 @@ DATA_SEG        SEGMENT
 
 DAC_MEMORY  DB  0       ;Holds the current DAC value
 GARBAGE     DB  0       ;Holds the current garbage character.
+LED_POSITION DB 0		;Holds the position in LED_TABLE
 
 LED_TABLE	DB		71h		;Display 'F'
 			DB	79h		;'E'
