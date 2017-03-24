@@ -18,7 +18,7 @@ PORT_B_ADDR EQU 0FFFAh  ;Port B address
 ; 8253 Setup
 COUNT_CNTR  EQU 000Eh   ;counter control register address
 MODE2       EQU 74h     ;01110100b - 01:Select Counter 1, 11:Read LSB first, 010:Mode 2, 0:Binary counter
-MODE22      EQU 0B4h     ;10110100b - 01:Select Counter 2, 11:Read LSB first, 010:Mode 2, 0:Binary counter
+MODE22      EQU 0B4h    ;10110100b - 01:Select Counter 2, 11:Read LSB first, 010:Mode 2, 0:Binary counter
 MODE3       EQU 36h     ;00110110b - 00: select counter 0, 11:Read LSB first, 011:Mode 3, 0:Binary counter
 COUNT0      EQU 0008h   ;counter0 address
 COUNT1      EQU 000Ah   ;counter1 address
@@ -37,7 +37,7 @@ ICW1        EQU 17h     ;00010111b - 000: address of IVA, 1, 0 - Edge triggered,
 ICW2        EQU 20h     ;00100000b - T7-T3 = 00100
 ICW4        EQU 13h     ;00010011b - 000, 1:fully nested, non-buffered, Auto EOI, 8086 mode
 OCW1        EQU 0F8h    ;11111000 - channel 2, 1 and 0 enabled.
-OCW2		EQU 11000100b
+OCW2		EQU 11000001b
 
 ; 8279 Setup
 LED_RIGHT   EQU 090h    ;Address of the LED we want to use
@@ -46,7 +46,7 @@ LED_CNTR    EQU 0FFEAh  ;Port number for 8279 control register
 LED_DATA    EQU 0FFE8h  ;Port number for 8279 data register 
 
 ; ISR 2 constant
-MAX_LED_POSITION EQU 15 
+MAX_LED_POSITION EQU 16 
 
 ;-----------------------------------------------------------------------------
 ;       S T A R T    O F    V E C T O R    S E G M E N T 
@@ -213,8 +213,9 @@ ISR2    PROC    NEAR
         OUT     DX,AL           ;Load LED addr.-> control reg.
         MOV     DX,LED_DATA     ;Address for data register
         MOV     BX, offset LED_TABLE
-        MOV     AL,[BX + LED_POSITION]
-        INC     [LED_POSITION]
+        MOV     AL,[LED_POSITION]
+		XLAT	LED_TABLE
+        INC     LED_POSITION
 		MOV		BL, [LED_POSITION]
         CMP     BL, MAX_LED_POSITION
         JNE     DISP1
